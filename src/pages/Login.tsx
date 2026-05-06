@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { FormEvent } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,6 +21,9 @@ export default function Login() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSetupOption, setShowSetupOption] = useState(false);
+  const [showChurchContactModal, setShowChurchContactModal] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState(false);
 
   useEffect(() => {
     if (session) {
@@ -231,12 +235,14 @@ export default function Login() {
                     >
                       {language === 'zh' ? '加入教会' : 'Join Church'}
                     </button>
-                    <button
-                      onClick={() => setIsRegisteringChurch(true)}
-                      className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${isRegisteringChurch ? 'bg-white shadow-sm text-black' : 'text-outline hover:text-on-surface'}`}
-                    >
-                      {language === 'zh' ? '开通系统' : 'Setup System'}
-                    </button>
+                    {showSetupOption && (
+                      <button
+                        onClick={() => setIsRegisteringChurch(true)}
+                        className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${isRegisteringChurch ? 'bg-white shadow-sm text-black' : 'text-outline hover:text-on-surface'}`}
+                      >
+                        {language === 'zh' ? '开通系统' : 'Setup System'}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -252,6 +258,10 @@ export default function Login() {
                       <div className="flex flex-col gap-1.5">
                         <label className="ml-1 font-label-sm text-on-surface-variant">Church Name</label>
                         <input required name="churchName" className="w-full rounded-lg border border-outline-variant/50 bg-surface-container py-3 px-4 text-sm" />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="ml-1 font-label-sm text-on-surface-variant">Church Phone</label>
+                        <input required name="phone" type="tel" className="w-full rounded-lg border border-outline-variant/50 bg-surface-container py-3 px-4 text-sm" />
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="ml-1 font-label-sm text-on-surface-variant">Location Address</label>
@@ -285,7 +295,19 @@ export default function Login() {
                       {!isLogin && (
                         <>
                           <div className="flex flex-col gap-1.5">
-                            <label htmlFor="churchCode" className="ml-1 font-label-sm text-on-surface-variant">{t('churchCode')}</label>
+                            <label htmlFor="churchCode" className="ml-1 font-label-sm text-on-surface-variant flex items-center justify-between">
+                              {t('churchCode')}
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setShowChurchContactModal(true);
+                                }}
+                                className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all shadow-sm ring-1 ring-primary/20"
+                                title="Need Help?"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">help</span>
+                              </button>
+                            </label>
                             <div className="relative">
                               <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-outline">
                                 <span className="material-symbols-outlined text-[18px]">vpn_key</span>
@@ -379,6 +401,11 @@ export default function Login() {
                         <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
                         <span>{language === 'zh' ? '使用 Google 账号登录' : 'Sign in with Google'}</span>
                       </button>
+                      <p className="px-2 text-center text-[10px] font-medium text-outline/60 leading-tight">
+                        {language === 'zh' 
+                          ? 'Google 登录后默认为“成员”身份。之后可由管理员升级权限。' 
+                          : 'Google sign-ins are joined as "Member" by default. Roles can be upgraded by admins later.'}
+                      </p>
 
                       <div className="relative flex items-center justify-center py-2">
                         <div className="absolute inset-0 flex items-center">
@@ -454,6 +481,84 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showChurchContactModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 text-left">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowChurchContactModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[40px] p-10 shadow-2xl overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-serif text-2xl font-black">{language === 'zh' ? '找不到您的教会？' : 'Church Not Found?'}</h3>
+                <button onClick={() => setShowChurchContactModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors">
+                  <span className="material-symbols-outlined text-outline">close</span>
+                </button>
+              </div>
+
+              <p className="text-sm text-outline mb-8 leading-relaxed">
+                {language === 'zh' 
+                  ? '您的教会目前不在我们的系统。如果您是管理员，并希望开通系统，请填写以下信息。我们随后会与您联系。' 
+                  : 'Your church isn\'t in our system yet. If you are an admin and wish to set up a system, please fill in the info below. We will reach out to you.'}
+              </p>
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                setContactSuccess(true);
+                setShowSetupOption(true);
+                setTimeout(() => {
+                  setContactSuccess(false);
+                  setShowChurchContactModal(false);
+                }, 3000);
+              }} className="space-y-4">
+                 <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-outline ml-1">{language === 'zh' ? '教会名称' : 'Church Name'}</label>
+                    <input required type="text" className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low py-3 px-4 text-sm focus:border-primary outline-none transition-all" />
+                 </div>
+                 <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-outline ml-1">{language === 'zh' ? '电话号码' : 'Phone Number'}</label>
+                    <input required type="tel" className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low py-3 px-4 text-sm focus:border-primary outline-none transition-all" />
+                 </div>
+                 <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-outline ml-1">{language === 'zh' ? '邮件' : 'Email'}</label>
+                    <input required type="email" className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low py-3 px-4 text-sm focus:border-primary outline-none transition-all" />
+                 </div>
+                 <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-outline ml-1">{language === 'zh' ? '地址' : 'Address'}</label>
+                    <input required type="text" className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low py-3 px-4 text-sm focus:border-primary outline-none transition-all" />
+                 </div>
+                 <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-outline ml-1">{language === 'zh' ? '教会链接 / YouTube 频道' : 'Church Link / YouTube Channel'}</label>
+                    <input type="url" placeholder="https://..." className="w-full rounded-xl border border-outline-variant/30 bg-surface-container-low py-3 px-4 text-sm focus:border-primary outline-none transition-all" />
+                 </div>
+                 
+                 {contactSuccess ? (
+                   <motion.div 
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="py-4 text-center text-success font-bold text-sm bg-success/10 rounded-xl"
+                   >
+                      {language === 'zh' ? '已收录！我们将尽快联系您。' : 'Someone will contact you.'}
+                   </motion.div>
+                 ) : (
+                   <button type="submit" className="w-full mt-4 rounded-2xl bg-black text-white py-4 font-black uppercase tracking-widest hover:bg-primary transition-all shadow-xl active:scale-95">
+                      {language === 'zh' ? '提交申请' : 'SUBMIT APPLICATION'}
+                   </button>
+                 )}
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

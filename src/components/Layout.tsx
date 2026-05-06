@@ -68,6 +68,7 @@ export default function Layout() {
 
     if (mode === 'Manager') {
       items.splice(1, 0, { icon: 'smart_toy', label: 'Grace Assistant', path: '/app/ai' });
+      items.push({ icon: 'build', label: language === 'zh' ? '管理工具' : 'Tools', path: '/app/tools' });
     }
 
     if (profile?.role === 'Super Admin') {

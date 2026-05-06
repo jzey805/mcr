@@ -15,6 +15,7 @@ import ActivityLog from './pages/ActivityLog';
 import ReadyPPT from './pages/ReadyPPT';
 import Profile from './pages/Profile';
 import SuperAdmin from './pages/SuperAdmin';
+import Tools from './pages/Tools';
 import { ModeProvider } from './contexts/ModeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="profile" element={<Profile />} />
                 <Route path="activity" element={<ActivityLog />} />
                 <Route path="ready" element={<ReadyPPT />} />
+                <Route path="tools" element={<Tools />} />
                 <Route path="super-admin" element={<SuperAdmin />} />
               </Route>
             </Routes>

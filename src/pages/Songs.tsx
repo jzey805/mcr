@@ -701,7 +701,7 @@ export default function Songs() {
                   <p className="text-outline/40 text-sm max-w-sm mx-auto font-medium leading-relaxed">{t('resourcesReadyDesc')}</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full max-w-6xl mx-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl mx-auto">
                   {/* PPT Export Card */}
                   <div className="group p-8 rounded-[36px] bg-[#F9F7F5] border border-[#E5E0DA]/30 flex flex-col items-start text-left gap-6 hover:shadow-xl hover:bg-white transition-all duration-500">
                     <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
@@ -813,41 +813,6 @@ export default function Songs() {
                     </div>
                   </div>
 
-                  {/* Roster PDF Export Card */}
-                  <div className="group p-8 rounded-[36px] bg-[#F9F7F5] border border-[#E5E0DA]/30 flex flex-col items-start text-left gap-6 hover:shadow-xl hover:bg-white transition-all duration-500">
-                    <div className="w-14 h-14 rounded-2xl bg-[#4F46E5] text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined text-2xl">table_view</span>
-                    </div>
-                    <div className="space-y-3 w-full">
-                      <div className="flex items-center justify-between">
-                         <div className="flex-1 mr-4">
-                               <h4 className="text-sm font-black text-[#2C2C2C] uppercase tracking-wider line-clamp-1 flex items-center gap-2">
-                                 ROSTER.PDF
-                               </h4>
-                         </div>
-                         <span className="px-2 py-0.5 rounded bg-[#4F46E5]/10 text-[#4F46E5] text-[8px] font-black uppercase">DOC</span>
-                      </div>
-                      <p className="text-[10px] font-bold text-outline/40 uppercase tracking-widest leading-relaxed">
-                        {t('roster')} · {t('sundayWorship')}
-                      </p>
-                    </div>
-                    <div className="mt-auto w-full pt-4 space-y-3">
-                       <a
-                         href="/#roster" 
-                         className="w-full py-4 bg-[#4F46E5] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#4338CA] transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 block text-center"
-                       >
-                         <span className="material-symbols-outlined text-[16px]">visibility</span>
-                         {t('viewAll')}
-                       </a>
-                       <button 
-                         onClick={() => handleDownload(`Roster_${Date.now()}.pdf`)}
-                         className="w-full py-3 border border-black/10 text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-black hover:text-white transition-all flex items-center justify-center gap-2"
-                       >
-                         <span className="material-symbols-outlined text-[14px]">download</span>
-                         {t('exportRosterPdf')}
-                       </button>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-16 flex flex-col items-center gap-4">
