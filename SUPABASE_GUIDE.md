@@ -120,6 +120,26 @@ CREATE TRIGGER on_auth_user_created
 
 ---
 
+## 第五步：配置存储空间 (Storage) - 用于上传 Logo 和图片
+如果你的应用需要上传 Logo 或照片，你需要手动创建一个公共存储桶。
+1. 在 Supabase 左侧菜单点击 **Storage** (盒子图标)。
+2. 点击 **"New Bucket"**。
+3. 输入 Bucket 名称: `public` (这是最通用的名称)。
+4. **务必勾选 "Public bucket"** (任何人都可以查看上传后的图片链接)。
+5. 点击 **Save**。
+6. **重要：配置权限（RLS Policies）**
+   - 进入你刚创建的 `public` bucket。
+   - 点击 **Policies** 标签页。
+   - 点击 **"New Policy"**。
+   - 选择 **"For full customization"**。
+   - 在 **Allowed operations** 中勾选 **SELECT**, **INSERT**, **UPDATE**。
+   - 在 **Target roles** 中保持 `authenticated` (只有登录用户能上传) 或如果要方便测试可以设为 `anon`。
+   - 点击 **Review** -> **Save**。
+   - 现在你的图片上传功能就可以正式使用了！
+
+---
+
 ## 常见问题
 - **报错 "churches not found":** 请确保你已经在 SQL Editor 中运行了上面的代码。
+- **无法上传图片 (Upload failed):** 请确保你已经按照第五步创建了名为 `public` 的 **Public Bucket**，并且配置了权限。
 - **无法登录:** 确保你在 Supabase 的 **Authentication** -> **Providers** 中开启了 **Email**（默认是开启的）。

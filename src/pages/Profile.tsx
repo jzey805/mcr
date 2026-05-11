@@ -1,33 +1,140 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMode } from '../contexts/ModeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function Profile() {
   const { mode } = useMode();
-  const { t, setLanguage } = useLanguage();
+  const { t, setLanguage, isZh } = useLanguage();
+  const { profile, user, refreshProfile } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
-    firstName: 'Sarah',
-    lastName: 'Michaels',
-    email: 'sarah.michaels@example.com',
-    phone: '(555) 123-4567',
-    dob: '1995-08-15',
-    age: '29',
-    address: '123 Grace Ave, Sydney, NSW 2000',
-    hometown: '台灣台北', // Default per request
-    language: localStorage.getItem('app-language') || 'system',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    dob: '',
+    age: '',
+    address: '',
+    hometown: '',
+    language: localStorage.getItem('app-language') || 'en',
   });
 
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (profile) {
+      const names = (profile.full_name || '').split(' ');
+      setFormData({
+        firstName: names[0] || '',
+        lastName: names.slice(1).join(' ') || '',
+        email: user?.email || '',
+        phone: profile.phone || '',
+        dob: profile.dob || '',
+        age: profile.age || '',
+        address: profile.address || '',
+        hometown: profile.hometown || '',
+        language: profile.language || localStorage.getItem('app-language') || 'en',
+      });
+    }
+  }, [profile, user]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setSaving(true);
-    setLanguage(formData.language as any);
-    setTimeout(() => {
+    setMsg(null);
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+          phone: formData.phone,
+          dob: formData.dob,
+          age: parseInt(formData.age) || null,
+          address: formData.address,
+          hometown: formData.hometown,
+          language: formData.language
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      
+      setLanguage(formData.language as any);
+      await refreshProfile();
+      setMsg({ type: 'success', text: isZh ? '个人资料已更新' : 'Profile updated successfully' });
+    } catch (err: any) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
       setSaving(false);
-      // alert('Profile updated successfully');
-    }, 1000);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    setMsg(null);
+    try {
+      // 1. Upload to storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Try common bucket names
+      const buckets = ['public', 'avatars', 'profiles'];
+      let publicUrl = '';
+      let lastError = null;
+
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            publicUrl = data.publicUrl;
+            break;
+          }
+          lastError = uploadError;
+        } catch (innerErr) {
+          lastError = innerErr;
+        }
+      }
+
+      if (!publicUrl) {
+        throw lastError || new Error('Storage bucket not found or access denied');
+      }
+
+      // 3. Update profile
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      await refreshProfile();
+      setMsg({ type: 'success', text: isZh ? '头像已上传' : 'Avatar uploaded successfully' });
+    } catch (err: any) {
+      console.error(err);
+      setMsg({ 
+        type: 'error', 
+        text: (isZh ? '上传失败。请创建名为 "public" 的公共存储桶。错误: ' : 'Upload failed. Please create a "public" bucket. Error: ') + (err.message || 'Unknown error')
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -45,29 +152,54 @@ export default function Profile() {
         <div className="flex flex-col gap-6">
           <div className="glass-card shadow-sm p-6 flex flex-col items-center text-center">
             <div className="relative mb-4">
-              <img
-                src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200&auto=format&fit=crop"
-                alt="Profile"
-                className="h-32 w-32 rounded-full border-4 border-surface object-cover shadow-md"
+              <div className="h-32 w-32 rounded-full border-4 border-surface shadow-md overflow-hidden bg-primary/10 flex items-center justify-center">
+                {uploading ? (
+                  <span className="material-symbols-outlined animate-spin text-primary">progress_activity</span>
+                ) : profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-4xl font-serif font-black text-primary uppercase">
+                    {(profile?.full_name || user?.email || 'U').charAt(0)}
+                  </span>
+                )}
+              </div>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleAvatarUpload} 
+                className="hidden" 
+                accept="image/*"
               />
               <button 
-                className="absolute bottom-0 right-0 p-2 bg-primary text-on-primary rounded-full shadow-lg hover:bg-primary-container transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="absolute bottom-0 right-0 p-3 bg-black text-white rounded-full shadow-lg hover:bg-primary transition-all active:scale-95 disabled:opacity-50"
                 title="Update Photo"
               >
                 <span className="material-symbols-outlined text-sm">photo_camera</span>
               </button>
             </div>
-            <h3 className="font-headline-md text-xl text-on-surface">{formData.firstName} {formData.lastName}</h3>
+            <h3 className="font-headline-md text-xl text-on-surface line-clamp-1">{profile?.full_name || user?.email?.split('@')[0]}</h3>
             <p className="mt-1 font-label-sm uppercase tracking-widest text-outline">{mode}</p>
             
+            {msg && (
+              <p className={`mt-4 text-[10px] font-bold p-2 rounded-lg w-full ${msg.type === 'error' ? 'bg-error/10 text-error' : 'bg-success/10 text-success'}`}>
+                {msg.text}
+              </p>
+            )}
+
             <div className="mt-6 flex flex-col gap-2 w-full">
               <div className="text-xs text-on-surface-variant flex items-center justify-between">
                 <span>{t('joinedLabel')}</span>
-                <span className="font-medium text-on-surface">Oct 2021</span>
+                <span className="font-medium text-on-surface">{profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : '---'}</span>
               </div>
               <div className="text-xs text-on-surface-variant flex items-center justify-between">
                 <span>{t('statusLabel')}</span>
-                <span className="font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded">{t('activeStatus')}</span>
+                <span className="font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded uppercase text-[10px] tracking-widest font-black">{profile?.role || 'Pending'}</span>
               </div>
             </div>
           </div>

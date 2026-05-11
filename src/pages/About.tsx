@@ -1,50 +1,227 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useMode } from '../contexts/ModeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 export default function About() {
   const { mode } = useMode();
   const { t } = useLanguage();
+  const { church, profile, refreshProfile } = useAuth();
   
   const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [galleryLimit, setGalleryLimit] = useState(4);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const mainImageInputRef = useRef<HTMLInputElement>(null);
 
   const [aboutData, setAboutData] = useState({
-    name: t('churchTitle'),
-    description: t('churchDesc'),
-    vision: '"To see lives transformed by the power of God\'s love and grace."',
-    imageUrl: 'https://images.unsplash.com/photo-1544427920-c49ccfb85579?q=80&w=1600&auto=format&fit=crop',
+    name: '',
+    description: '',
+    vision: '',
+    imageUrl: '',
+    logoUrl: '',
     serviceTimes: 'Sunday 9:00 AM',
     secondaryTime: 'Wednesday 7:30 PM',
-    location: '123 Grace Way, Serenity City',
-    history: t('graceMission'),
-    founders: 'Ps. David & Sarah Chen',
-    denomination: t('independentPentecostal'),
+    location: '',
+    history: '',
+    founders: '',
+    denomination: '',
     galleryImages: [
       'https://images.unsplash.com/photo-1510590337019-5ef8d3d32116?q=80&w=600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1548625361-ecacfa310659?q=80&w=600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1511649475669-e288648b2339?q=80&w=600&auto=format&fit=crop',
       'https://images.unsplash.com/photo-1529070532788-757659e6659c?q=80&w=600&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1438283173091-5dbf5c5a3206?q=80&w=1000&auto=format&fit=crop',
     ],
     team: [
       { name: 'David Chen', role: t('pastors'), image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop', title: t('pastorShort') },
       { name: 'Sarah Chen', role: t('pastors'), image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop', title: t('pastorShort') },
-      { name: 'Michael Wong', role: t('groupLeaders'), image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop', title: t('leaderShort') },
-      { name: 'Linda Kim', role: t('groupLeaders'), image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=200&auto=format&fit=crop', title: t('leaderShort') },
     ]
   });
 
-  const handleSave = () => setIsEditing(false);
+  useEffect(() => {
+    if (church) {
+      setAboutData(prev => ({
+        ...prev,
+        name: church.name || t('churchTitle'),
+        description: church.description || t('churchDesc'),
+        imageUrl: church.image_url || 'https://images.unsplash.com/photo-1544427920-c49ccfb85579?q=80&w=1600&auto=format&fit=crop',
+        logoUrl: church.logo_url || '',
+        location: church.location || '123 Grace Way, Serenity City',
+      }));
+    }
+  }, [church, t]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSave = async () => {
+    if (!church?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('churches')
+        .update({
+          name: aboutData.name,
+          description: aboutData.description,
+          image_url: aboutData.imageUrl,
+          logo_url: aboutData.logoUrl,
+          location: aboutData.location,
+        })
+        .eq('id', church.id);
+
+      if (error) throw error;
+      await refreshProfile();
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Failed to save church details');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setAboutData({ ...aboutData, galleryImages: [url, ...aboutData.galleryImages] });
+    if (!file || !church?.id) return;
+    
+    setSaving(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${church.id}-logo-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Try common bucket names
+      const buckets = ['church-assets', 'public', 'avatars', 'logos'];
+      let publicUrl = '';
+      let lastError = null;
+
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            publicUrl = data.publicUrl;
+            break;
+          }
+          lastError = uploadError;
+        } catch (innerErr) {
+          lastError = innerErr;
+        }
+      }
+
+      if (publicUrl) {
+        setAboutData(prev => ({ ...prev, logoUrl: publicUrl }));
+      } else {
+        throw lastError || new Error('All upload attempts failed');
+      }
+    } catch (err: any) {
+      console.error('Logo upload failed:', err);
+      alert('Upload failed. Please ensure your Supabase Storage has a "public" or "church-assets" bucket with public access, or just paste an image URL instead.\n\nError: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMainImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !church?.id) return;
+    
+    setSaving(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${church.id}-hero-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Try common bucket names
+      const buckets = ['church-assets', 'public', 'avatars', 'hero'];
+      let publicUrl = '';
+      let lastError = null;
+
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, {
+              cacheControl: '3600',
+              upsert: true
+            });
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            publicUrl = data.publicUrl;
+            break;
+          }
+          lastError = uploadError;
+        } catch (innerErr) {
+          lastError = innerErr;
+        }
+      }
+
+      if (publicUrl) {
+        setAboutData(prev => ({ ...prev, imageUrl: publicUrl }));
+      } else {
+        throw lastError || new Error('All upload attempts failed');
+      }
+    } catch (err: any) {
+      console.error('Hero upload failed:', err);
+      alert('Upload failed. Please ensure your Supabase Storage has a "public" or "church-assets" bucket with public access.\n\nError: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !church?.id) return;
+
+    setSaving(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${church.id}-gallery-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Try common bucket names
+      const buckets = ['public', 'church-assets', 'gallery'];
+      let publicUrl = '';
+      let lastError = null;
+
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, { upsert: true });
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            publicUrl = data.publicUrl;
+            break;
+          }
+          lastError = uploadError;
+        } catch (innerErr) {
+          lastError = innerErr;
+        }
+      }
+
+      if (publicUrl) {
+        setAboutData(prev => ({ 
+          ...prev, 
+          galleryImages: [publicUrl, ...prev.galleryImages] 
+        }));
+      } else {
+        throw lastError || new Error('Upload failed');
+      }
+    } catch (err: any) {
+      console.error('Gallery upload failed:', err);
+      alert('Upload failed. Please ensure you have a "public" bucket in Supabase Storage.\n\nError: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -108,17 +285,55 @@ export default function About() {
                   className="w-full rounded-2xl border border-outline-variant bg-surface-container py-3 px-5 text-sm focus:border-primary outline-none transition-all"
                 />
               </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-outline ml-2">Church Logo (Small Square)</label>
+                <div className="flex gap-4 items-center">
+                  <div className="h-12 w-12 rounded-xl bg-surface-container-high border border-outline-variant overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    {aboutData.logoUrl ? (
+                      <img src={aboutData.logoUrl} className="w-full h-full object-cover" alt="Logo Preview" />
+                    ) : (
+                      <span className="material-symbols-outlined text-outline text-xl">church</span>
+                    )}
+                  </div>
+                  <div className="flex-1 flex gap-2">
+                    <input
+                      type="text"
+                      value={aboutData.logoUrl}
+                      onChange={e => setAboutData({ ...aboutData, logoUrl: e.target.value })}
+                      placeholder="Paste URL or upload..."
+                      className="flex-1 rounded-2xl border border-outline-variant bg-surface-container py-3 px-5 text-sm focus:border-primary outline-none transition-all"
+                    />
+                    <button 
+                      onClick={() => logoInputRef.current?.click()}
+                      className="h-11 w-11 rounded-2xl bg-surface-container-high border border-outline-variant flex items-center justify-center text-outline hover:text-primary hover:border-primary transition-all"
+                    >
+                      <span className="material-symbols-outlined">upload</span>
+                    </button>
+                    <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-6">
                <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-outline ml-2">Main Image URL</label>
-                <input
-                  type="text"
-                  value={aboutData.imageUrl}
-                  onChange={e => setAboutData({ ...aboutData, imageUrl: e.target.value })}
-                  className="w-full rounded-2xl border border-outline-variant bg-surface-container py-3 px-5 text-sm focus:border-primary outline-none transition-all"
-                />
+                <label className="text-[10px] uppercase font-bold tracking-widest text-outline ml-2">Main Hero Image</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aboutData.imageUrl}
+                    onChange={e => setAboutData({ ...aboutData, imageUrl: e.target.value })}
+                    placeholder="Hero Image URL..."
+                    className="flex-1 rounded-2xl border border-outline-variant bg-surface-container py-3 px-5 text-sm focus:border-primary outline-none transition-all"
+                  />
+                  <button 
+                    onClick={() => mainImageInputRef.current?.click()}
+                    className="h-11 w-11 rounded-2xl bg-surface-container-high border border-outline-variant flex items-center justify-center text-outline hover:text-primary hover:border-primary transition-all"
+                  >
+                    <span className="material-symbols-outlined">upload</span>
+                  </button>
+                  <input type="file" ref={mainImageInputRef} className="hidden" accept="image/*" onChange={handleMainImageUpload} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
@@ -150,7 +365,9 @@ export default function About() {
 
           <div className="mt-12 flex justify-end gap-4">
              <button onClick={() => setIsEditing(false)} className="px-8 py-3 text-sm font-bold text-outline hover:text-on-surface transition-colors">Cancel</button>
-             <button onClick={handleSave} className="rounded-2xl bg-primary px-10 py-3 text-sm font-bold text-on-primary shadow-xl shadow-primary/20 hover:opacity-90 transition-all">Save Changes</button>
+             <button onClick={handleSave} disabled={saving} className="rounded-2xl bg-primary px-10 py-3 text-sm font-bold text-on-primary shadow-xl shadow-primary/20 hover:opacity-90 transition-all disabled:opacity-50">
+               {saving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Save Changes'}
+             </button>
           </div>
         </div>
       ) : (

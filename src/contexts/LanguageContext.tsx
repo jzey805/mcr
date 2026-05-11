@@ -6,6 +6,7 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language | 'system') => void;
   t: (key: string) => string;
+  isZh: boolean;
 }
 
 const translations = {
@@ -17,7 +18,11 @@ const translations = {
     prayerWall: 'Prayer Wall',
     members: 'Members',
     giving: 'Giving',
+    groups: 'Groups',
     support: 'Support',
+    member: 'Member',
+    role: 'Role',
+    status: 'Status',
     managerPortal: 'MANAGER PORTAL',
     managerMode: 'MANAGER MODE',
     superAdminRole: 'SUPER ADMIN',
@@ -94,6 +99,8 @@ const translations = {
     teamReadiness: 'Team Readiness',
     confirmed: 'confirmed',
     approvals: 'APPROVALS',
+    groupLeader: 'Group Leader',
+    groupMember: 'Group Member',
     itemsWaiting: 'items waiting',
     newMembers: 'new members',
     searchStaff: 'Search staff...',
@@ -502,7 +509,11 @@ const translations = {
     prayerWall: '祷告墙',
     members: '会友',
     giving: '奉献',
+    groups: '小组',
     support: '支持',
+    member: '会友',
+    role: '角色',
+    status: '状态',
     managerPortal: '管理员系统',
     managerMode: '管理员模式',
     superAdminRole: '超级管理员',
@@ -578,6 +589,8 @@ const translations = {
     teamReadiness: '团队准备情况',
     confirmed: '已确认',
     approvals: '审批',
+    groupLeader: '小组长',
+    groupMember: '小组成员',
     itemsWaiting: '项待处理',
     newMembers: '新成员',
     searchStaff: '搜索人员...',
@@ -2026,8 +2039,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     return (translations[language] as any)[key] || (translations['en'] as any)[key] || key;
   };
 
+  const isZh = language.startsWith('zh');
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, isZh }}>
       {children}
     </LanguageContext.Provider>
   );

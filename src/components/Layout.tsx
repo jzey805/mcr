@@ -4,6 +4,7 @@ import { useMode, Mode } from '../contexts/ModeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export default function Layout() {
   const location = useLocation();
@@ -14,9 +15,11 @@ export default function Layout() {
   const [isModeOpen, setIsModeOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isLogoUploading, setIsLogoUploading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const helpRef = useRef<HTMLDivElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -34,9 +37,65 @@ export default function Layout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const canManage = profile?.role === 'Admin' || profile?.role === 'Leader' || profile?.role === 'Super Admin' || profile?.role === 'Manager' || profile?.role === 'SuperAdmin';
+  const canStaff = canManage || profile?.role === 'Staff';
+  const isPlatformAdmin = profile?.role === 'Super Admin' || profile?.role === 'SuperAdmin' || user?.email === 'jzey805@gmail.com' || user?.email === 'hyy7010@gmail.com';
+  
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !church?.id) return;
+    
+    setIsLogoUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${church.id}-logo-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Try common bucket names
+      const buckets = ['public', 'church-assets', 'logos'];
+      let publicUrl = '';
+      let lastError = null;
+
+      for (const bucket of buckets) {
+        try {
+          const { error: uploadError } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, { upsert: true });
+
+          if (!uploadError) {
+            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+            publicUrl = data.publicUrl;
+            break;
+          }
+          lastError = uploadError;
+        } catch (innerErr) {
+          lastError = innerErr;
+        }
+      }
+
+      if (!publicUrl) throw lastError || new Error('Upload failed');
+
+      const { error: updateError } = await supabase
+        .from('churches')
+        .update({ logo_url: publicUrl })
+        .eq('id', church.id);
+
+      if (updateError) throw updateError;
+      
+      // We don't necessarily need to reload, the context should update if we had a listener, 
+      // but for now window.location.reload() is the safest way to sync everywhere.
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      alert('Upload failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsLogoUploading(false);
+    }
+  };
+
   const modeOptions: { value: Mode; label: string; icon: string; desc: string; color: string }[] = [
-    { value: 'Manager', label: t('managerMode'), icon: 'admin_panel_settings', desc: 'Full access', color: 'text-primary' },
-    { value: 'Staff', label: t('staffMode'), icon: 'badge', desc: 'Roster & Items', color: 'text-secondary' },
+    ...(canManage ? [{ value: 'Manager' as Mode, label: t('managerMode'), icon: 'admin_panel_settings', desc: 'Full access', color: 'text-primary' }] : []),
+    ...(canStaff ? [{ value: 'Staff' as Mode, label: t('staffMode'), icon: 'badge', desc: 'Roster & Items', color: 'text-secondary' }] : []),
     { value: 'Member', label: t('memberMode'), icon: 'person', desc: 'Church activities', color: 'text-outline' },
   ];
 
@@ -49,6 +108,7 @@ export default function Layout() {
         { icon: 'church', label: t('aboutChurch'), path: '/app/about' },
         { icon: 'volunteer_activism', label: t('prayerWall'), path: '/app/prayer' },
         { icon: 'favorite', label: t('giving'), path: '/app/giving' },
+        { icon: 'groups', label: t('groups'), path: '/app/groups' },
       ];
     }
     
@@ -56,6 +116,7 @@ export default function Layout() {
     const items = [
       { icon: 'dashboard', label: t('dashboard'), path: '/app/dashboard' },
       { icon: 'church', label: t('aboutChurch'), path: '/app/about' },
+      { icon: 'groups', label: t('groups'), path: '/app/groups' },
       { icon: 'group', label: t('members'), path: '/app/members' },
       { icon: 'task_alt', label: t('tasks'), path: '/app/tasks' },
       { icon: 'calendar_month', label: t('roster'), path: '/app/roster' },
@@ -68,10 +129,14 @@ export default function Layout() {
 
     if (mode === 'Manager') {
       items.splice(1, 0, { icon: 'smart_toy', label: 'Grace Assistant', path: '/app/ai' });
-      items.push({ icon: 'build', label: language === 'zh' ? '管理工具' : 'Tools', path: '/app/tools' });
+      items.splice(2, 0, { icon: 'how_to_reg', label: language.startsWith('zh') ? '成员审核' : 'Approvals', path: '/app/approvals' });
+      items.push({ icon: 'build', label: language.startsWith('zh') ? '管理工具' : 'Tools', path: '/app/tools' });
     }
 
-    if (profile?.role === 'Super Admin') {
+    const isSuperAdmin = profile?.role === 'Super Admin' || profile?.role === 'SuperAdmin' || 
+                        user?.email === 'jzey805@gmail.com' || user?.email === 'hyy7010@gmail.com';
+
+    if (isSuperAdmin) {
       items.push({ icon: 'admin_panel_settings', label: 'Platform Console', path: '/app/super-admin' });
     }
 
@@ -84,15 +149,35 @@ export default function Layout() {
     <div className="flex h-screen w-full overflow-hidden bg-surface transition-colors duration-300">
       {/* Sidebar */}
       <nav className="fixed left-0 top-0 h-full w-72 flex flex-col border-r border-outline-variant/30 bg-surface-container-lowest py-6 z-50 shadow-2xl print:hidden">
-        <Link to="/app/dashboard" className="px-6 mb-8 flex flex-col gap-1 group">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-white text-2xl">church</span>
+        <div className="px-6 mb-8 flex flex-col gap-1 group">
+          <div 
+            onClick={() => (mode === 'Manager' || isPlatformAdmin) && logoInputRef.current?.click()}
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20 transition-all overflow-hidden relative ${
+              (mode === 'Manager' || isPlatformAdmin) ? 'cursor-pointer hover:scale-110 active:scale-95' : ''
+            } ${isLogoUploading ? 'opacity-50' : 'bg-primary'}`}
+          >
+            {church?.logo_url ? (
+              <img src={church.logo_url} className="w-full h-full object-cover" alt="Church Logo" />
+            ) : (
+              <span className="material-symbols-outlined text-white text-2xl">church</span>
+            )}
+            {(mode === 'Manager' || isPlatformAdmin) && (
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <span className="material-symbols-outlined text-white text-lg">upload</span>
+              </div>
+            )}
+            {isLogoUploading && (
+              <div className="absolute inset-0 bg-white/20 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
-          <h1 className="text-xl font-black text-on-surface tracking-tight font-serif italic group-hover:text-primary transition-colors line-clamp-2">
-            {church?.name || 'Grace Community'}
+          <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={handleLogoUpload} />
+          <h1 className="text-xl font-black text-on-surface tracking-tight font-serif italic hover:text-primary transition-colors line-clamp-2 cursor-default">
+            {church?.name || (profile?.role === 'Super Admin' ? 'Platform Console' : '...')}
           </h1>
-          <p className="text-[10px] font-black text-outline uppercase tracking-[0.2em]">{t('graceSystem') || 'Ministry Management System'}</p>
-        </Link>
+          <p className="text-[10px] font-black text-outline uppercase tracking-[0.2em]">{church?.church_code || 'Ministry Management System'}</p>
+        </div>
 
         {/* Custom Mode Switcher - Refined UI */}
         <div className="px-4 mb-8" ref={dropdownRef}>
@@ -154,15 +239,6 @@ export default function Layout() {
            </div>
         </div>
 
-        {mode === 'Manager' && (
-          <div className="px-4 mb-6 shrink-0">
-            <button className="w-full bg-primary text-on-primary font-black uppercase tracking-widest py-4 rounded-[20px] shadow-lg shadow-primary/20 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-3 text-[10px]">
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              {t('newEvent')}
-            </button>
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto no-scrollbar scroll-smooth">
           <ul className="flex flex-col gap-1.5 px-3">
             {navItems.map((item) => {
@@ -211,7 +287,7 @@ export default function Layout() {
         {/* Top Navbar */}
         <header className="shrink-0 z-40 flex w-full items-center justify-between border-b border-outline-variant/30 bg-surface-container-lowest/90 px-8 py-4 backdrop-blur-md">
           <div className="text-xl font-bold tracking-tight text-primary font-serif md:hidden">
-            {church?.name || 'Grace Community'}
+            {church?.name || (profile?.role === 'Super Admin' ? 'Admin Panel' : '...')}
           </div>
           <div className="hidden md:block">
              <div className="flex items-center gap-2 text-outline/50 text-[10px] font-black uppercase tracking-[0.2em]">
@@ -308,14 +384,21 @@ export default function Layout() {
               onClick={() => navigate('/app/profile')}
               className="flex items-center gap-3 cursor-pointer group p-1 pr-3 rounded-2xl hover:bg-surface-container transition-all"
             >
-              <div className="h-9 w-9 rounded-xl border-2 border-white shadow-sm bg-primary text-white flex items-center justify-center font-serif font-black uppercase text-sm group-hover:scale-105 transition-transform">
-                 {/* @ts-ignore */}
-                 {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              <div className="h-9 w-9 rounded-xl border-2 border-white shadow-sm bg-primary text-white flex items-center justify-center overflow-hidden font-serif font-black uppercase text-sm group-hover:scale-105 transition-transform">
+                 {profile?.avatar_url ? (
+                   <img src={profile.avatar_url} className="h-full w-full object-cover" alt="Avatar" />
+                 ) : (
+                   <span>{profile?.full_name?.charAt(0) || user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}</span>
+                 )}
               </div>
               <div className="hidden xl:block">
                  {/* @ts-ignore */}
-                <p className="text-[10px] font-black text-on-surface leading-none mb-1">{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}</p>
-                <p className="text-[8px] font-bold text-outline uppercase tracking-widest leading-none text-left">{user?.id === 'guest-id' ? 'DEMO MODE' : mode}</p>
+                <p className="text-[10px] font-black text-on-surface leading-none mb-1">
+                  {profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
+                </p>
+                <p className="text-[8px] font-bold text-outline uppercase tracking-widest leading-none text-left">
+                  {user?.id === 'guest-id' ? 'DEMO MODE' : (profile?.role === 'Super Admin' || profile?.role === 'SuperAdmin' ? 'Super Admin' : mode)}
+                </p>
               </div>
             </div>
           </div>

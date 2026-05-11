@@ -525,47 +525,77 @@ export default function Members() {
             {viewMode === 'Graph' ? (
               <svg ref={svgRef} className="w-full h-full" />
             ) : (
-              <div className="p-8 grid grid-cols-1 xl:grid-cols-2 gap-6 content-start">
-                <AnimatePresence>
-                  {nodes.filter(n => filteredNodeIds.has(n.id)).map(node => (
-                    <motion.div 
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      key={node.id}
-                      onClick={() => {
-                        setSelectedNode(node);
-                      }}
-                      className={`p-4 rounded-3xl border flex items-center gap-4 transition-all cursor-pointer ${
-                        selectedNode?.id === node.id ? 'bg-primary/5 border-primary shadow-lg shadow-primary/5' : 'bg-white border-outline-variant/20 hover:border-primary/50'
-                      }`}
-                    >
-                      <div className="w-12 h-12 shrink-0 rounded-2xl flex items-center justify-center font-serif font-black text-lg border" style={{ borderColor: ROLE_COLORS[node.status], color: ROLE_COLORS[node.status] }}>
-                        {node.initials}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-lg text-on-surface">{node.name}</h3>
-                        <p className="text-[10px] font-black uppercase tracking-widest opacity-60 text-on-surface-variant mb-3">{t(node.occupation || '')}</p>
-                        <div className="flex flex-wrap gap-2">
-                           {node.skills?.slice(0, 2).map(skill => (
-                             <span key={skill} className="px-2 py-0.5 rounded-lg border border-outline-variant/30 text-[8px] font-bold text-outline uppercase">{skill}</span>
-                           ))}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+              <div className="p-6 md:p-8 space-y-6">
+                {nodes.filter(n => filteredNodeIds.has(n.id)).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-[40px] border-2 border-dashed border-outline-variant/20">
+                    <span className="material-symbols-outlined text-outline text-6xl mb-4">person_search</span>
+                    <p className="text-outline font-black uppercase tracking-widest text-xs">No members found</p>
+                    <p className="text-[10px] text-outline/60 mt-1">Try adjusting your filters or adding a new member.</p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-[40px] border border-outline-variant/10 overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-outline-variant/10 bg-surface-container-low/50">
+                          <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-outline">{t('member')}</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-outline hidden md:table-cell">{t('role')}</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-outline hidden lg:table-cell">{t('industry')}</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-outline hidden xl:table-cell">{t('phoneLabel')}</th>
+                          <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-outline">{t('status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {nodes.filter(n => filteredNodeIds.has(n.id)).map(node => (
+                          <tr 
+                            key={node.id} 
+                            onClick={() => setSelectedNode(node)}
+                            className={`group cursor-pointer border-b border-outline-variant/5 transition-all ${selectedNode?.id === node.id ? 'bg-primary/5' : 'hover:bg-primary/5'}`}
+                          >
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black border" style={{ borderColor: ROLE_COLORS[node.status as keyof typeof ROLE_COLORS], color: ROLE_COLORS[node.status as keyof typeof ROLE_COLORS] }}>
+                                  {node.initials}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-sm text-on-surface">{node.name}</p>
+                                  <p className="text-[10px] text-outline font-medium">{node.email || 'No email'}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 hidden md:table-cell">
+                              <div className="flex flex-wrap gap-1">
+                                {node.role.map(r => (
+                                  <span key={r} className="px-2 py-0.5 rounded-lg bg-surface-container text-[8px] font-black uppercase tracking-tighter text-outline">{r}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 hidden lg:table-cell text-xs font-bold text-outline">
+                              {t(node.occupation || '') || node.occupation}
+                            </td>
+                            <td className="px-6 py-4 hidden xl:table-cell text-xs font-bold text-outline">
+                              {node.phone || '—'}
+                            </td>
+                            <td className="px-6 py-4">
+                               <span className="px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border" style={{ borderColor: ROLE_COLORS[node.status as keyof typeof ROLE_COLORS] + '40', color: ROLE_COLORS[node.status as keyof typeof ROLE_COLORS], backgroundColor: ROLE_COLORS[node.status as keyof typeof ROLE_COLORS] + '10' }}>
+                                 {node.status}
+                               </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
             <AnimatePresence>
               {mode === 'Manager' && viewMode === 'Graph' && showGraphInstructions && (
-                <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none z-40">
+                <div className="absolute inset-0 flex items-start justify-center p-8 pointer-events-none z-40">
                    <motion.div 
-                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                     initial={{ opacity: 0, scale: 0.9, y: -20 }}
                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                     exit={{ opacity: 0, scale: 0.9, y: -20 }}
                      className="bg-black/95 text-white pl-8 pr-6 py-5 rounded-[40px] text-[12px] font-black uppercase tracking-[0.2em] flex items-center gap-4 border border-white/10 shadow-2xl pointer-events-auto shadow-black/50"
                    >
                       <span className="material-symbols-outlined text-primary text-2xl">touch_app</span>
@@ -625,15 +655,29 @@ export default function Members() {
                 </div>
               </div>
 
-              <div className="space-y-2 mb-8">
-                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/40 border border-white/20 hover:border-primary/20 transition-all cursor-pointer group shadow-sm">
-                  <span className="material-symbols-outlined text-[18px] text-outline">alternate_email</span>
-                  <span className="text-xs font-bold text-on-surface truncate flex-1">{selectedNode.email || '—'}</span>
-                </div>
-                <div className="flex items-center gap-3 p-4 rounded-2xl bg-white/40 border border-white/20 hover:border-primary/20 transition-all cursor-pointer group shadow-sm">
-                  <span className="material-symbols-outlined text-[18px] text-outline">call</span>
-                  <span className="text-xs font-bold text-on-surface flex-1">{selectedNode.phone || '—'}</span>
-                </div>
+              <div className="flex gap-2 mb-8 mt-2">
+                <a 
+                  href={`tel:${selectedNode.phone}`}
+                  className={`flex-1 py-4 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all border border-primary/20 hover:bg-primary/10 ${!selectedNode.phone ? 'opacity-30 pointer-events-none' : ''}`}
+                >
+                  <span className="material-symbols-outlined text-primary text-xl">call</span>
+                  <span className="text-[8px] font-black uppercase text-primary">Call</span>
+                </a>
+                <a 
+                  href={`mailto:${selectedNode.email}`}
+                  className={`flex-1 py-4 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all border border-blue-200 hover:bg-blue-50 ${!selectedNode.email ? 'opacity-30 pointer-events-none' : ''}`}
+                >
+                  <span className="material-symbols-outlined text-blue-600 text-xl">alternate_email</span>
+                  <span className="text-[8px] font-black uppercase text-blue-600">Email</span>
+                </a>
+                <a 
+                  href={`https://wa.me/${selectedNode.phone?.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  className={`flex-1 py-4 rounded-2xl flex flex-col items-center justify-center gap-1 transition-all border border-green-200 hover:bg-green-50 ${!selectedNode.phone ? 'opacity-30 pointer-events-none' : ''}`}
+                >
+                  <span className="material-symbols-outlined text-green-600 text-xl">chat</span>
+                  <span className="text-[8px] font-black uppercase text-green-600">WA</span>
+                </a>
               </div>
 
               {mode === 'Manager' && (

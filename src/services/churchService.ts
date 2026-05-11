@@ -37,5 +37,32 @@ export const churchService = {
     
     if (error) throw error;
     return data;
+  },
+
+  async createChurch(name: string, code: string, extra?: { address?: string; phone?: string; website?: string }) {
+    const { data, error } = await supabase
+      .from('churches')
+      .insert([{ 
+        name, 
+        code, 
+        domain: code.toLowerCase() + '.gracesystem.org',
+        ...(extra || {})
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  async getChurchByDomain(domain: string) {
+    const { data, error } = await supabase
+      .from('churches')
+      .select('*')
+      .eq('domain', domain)
+      .maybeSingle();
+    
+    if (error) throw error;
+    return data;
   }
 };

@@ -2,9 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMode } from '../contexts/ModeContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { UPCOMING_EVENTS, ChurchEvent } from '../constants/events';
 import { motion, Reorder, useDragControls, AnimatePresence } from 'motion/react';
-import { askGraceAI } from '../services/geminiService';
+import { askGraceAIV2 } from '../services/geminiService';
 
 const verses = [
   { quote: "verse1_quote", ref: "Hebrews 11:1" },
@@ -17,13 +19,14 @@ const verses = [
 
 export default function Dashboard() {
   const { mode } = useMode();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { church, profile: currentUserProfile, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [printing, setPrinting] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+
   const initialSections = useMemo(() => {
-    return ['DailyVerse', 'MainStats', 'RosterActivity', 'RecentPulse'];
+    return ['DailyVerse', 'AiAssistant', 'MainStats', 'RosterActivity', 'RecentPulse'];
   }, []);
 
   const [sections, setSections] = useState(initialSections);
@@ -31,16 +34,12 @@ export default function Dashboard() {
   useEffect(() => {
     setSections(initialSections);
   }, [initialSections]);
-  
+
   const upcomingEvents = useMemo(() => {
     return UPCOMING_EVENTS.filter(e => e.status === 'Upcoming').slice(0, 3);
   }, []);
 
   // Manager State
-  const [pendingApprovals, setPendingApprovals] = useState([
-    { id: 1, name: 'John Smith', email: 'john@example.com', date: 'Just now' },
-    { id: 2, name: 'Alice Wong', email: 'alice.w@example.com', date: '2 hours ago' },
-  ]);
   const [tasks, setTasks] = useState([
     { id: 1, title: t('followUpVisitors'), done: false },
     { id: 2, title: t('prepareSermonSlides'), done: false },
@@ -58,26 +57,92 @@ export default function Dashboard() {
     e.preventDefault();
     // In a real app we'd add to state/DB
     setActivities([
-      { id: Date.now(), user: 'You', action: t('scheduledAction'), target: newEvent.title, type: 'System', time: t('justNow') },
+      { id: Date.now(), user: currentUserProfile?.full_name || 'You', action: t('scheduledAction'), target: newEvent.title, type: 'System', time: t('justNow') },
       ...activities
     ]);
     setShowAddEventModal(false);
   };
 
-  const handleApprove = (id: number) => {
-    const approvedUser = pendingApprovals.find(p => p.id === id);
-    if (approvedUser) {
-      setActivities([
-        { id: Date.now(), user: 'Ps. David', action: t('approvedMembership'), target: approvedUser.name, type: 'System', time: t('justNow') },
-        ...activities
-      ]);
-      setPendingApprovals(pendingApprovals.filter(p => p.id !== id));
+  const [pendingCount, setPendingCount] = useState(0);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchDashboardStats() {
+      if (!church?.id && currentUserProfile?.role !== 'Super Admin') {
+        return;
+      }
+
+      console.log('Fetching dashboard stats...', { churchId: church?.id, role: currentUserProfile?.role });
+      
+      try {
+        setLoadingStats(true);
+        
+        const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms));
+
+        // 1. Fetch Pending Approvals
+        const fetchPending = async () => {
+          const { count, error } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'Pending');
+          if (error) throw error;
+          return count;
+        };
+        
+        const pending = await Promise.race([fetchPending(), timeout(5000)]).catch(e => {
+          console.warn('Pending fetch failed:', e);
+          return 0;
+        }) as number;
+
+        if (active) setPendingCount(pending || 0);
+
+        // 2. Fetch Birthdays
+        const fetchBirthdays = async () => {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('full_name, dob, avatar_url')
+            .not('dob', 'is', null)
+            .limit(50);
+          if (error) throw error;
+          return data;
+        };
+
+        const birthdayFolks = await Promise.race([fetchBirthdays(), timeout(5000)]).catch(e => {
+          console.warn('Birthdays fetch failed:', e);
+          return [];
+        }) as any[];
+        
+        if (active) {
+          const today = new Date();
+          const month = today.getMonth() + 1;
+          const filtered = (birthdayFolks || []).filter(p => {
+            if (!p.dob) return false;
+            const [, m] = p.dob.split('-').map(Number);
+            return m === month;
+          });
+          setUpcomingBirthdays(filtered.slice(0, 3));
+        }
+      } catch (err) {
+        console.error('Dashboard stats error:', err);
+      } finally {
+        if (active) setLoadingStats(false);
+      }
     }
-  };
-  
-  const handleReject = (id: number) => {
-    setPendingApprovals(pendingApprovals.filter(p => p.id !== id));
-  };
+    fetchDashboardStats();
+    return () => { active = false; };
+  }, [church?.id, currentUserProfile?.id]);
+
+  // Optimized: Only show full-page spinner if we don't even have a profile yet.
+  // If we have a profile (even if still loading other auth components), show the dashboard shell.
+  if (authLoading && !currentUserProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
+      </div>
+    );
+  }
 
   const addTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +156,7 @@ export default function Dashboard() {
     setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
   };
   
-  const [dailyVerse, setDailyVerse] = useState(verses[0]);
+  const [dailyVerse, setDailyVerse] = useState<{ quote: string; ref: string; isCustom?: boolean }>(verses[0]);
   const [isEditingVerse, setIsEditingVerse] = useState(false);
   const [customVerse, setCustomVerse] = useState('');
   const [customRef, setCustomRef] = useState('');
@@ -129,7 +194,7 @@ export default function Dashboard() {
 
   // Grace AI State
   const [aiQuestion, setAiQuestion] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
+  const [aiResult, setAiResult] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
   const handleAskAI = async (e: React.FormEvent) => {
@@ -137,9 +202,9 @@ export default function Dashboard() {
     if (!aiQuestion.trim() || aiLoading) return;
     
     setAiLoading(true);
-    setAiResponse('');
-    const result = await askGraceAI(aiQuestion, "Grace Community Church management system. Personnel: David Chen (IT), Ps. David (Lead Pastor), Sarah Michaels (Worship).");
-    setAiResponse(result || 'No response context.');
+    setAiResult(null);
+    const result = await askGraceAIV2(aiQuestion, "Grace Community Church management system. Personnel: David Chen (IT), Ps. David (Lead Pastor), Sarah Michaels (Worship).", language);
+    setAiResult(result);
     setAiLoading(false);
     setAiQuestion('');
   };
@@ -187,13 +252,16 @@ export default function Dashboard() {
             handleSaveCustom={handleSaveCustom}
             aiQuestion={aiQuestion}
             setAiQuestion={setAiQuestion}
-            aiResponse={aiResponse}
+            aiResult={aiResult}
             aiLoading={aiLoading}
             handleAskAI={handleAskAI}
             sermon={sermon}
             isEditingSermon={isEditingSermon}
             setIsEditingSermon={setIsEditingSermon}
             handleSaveSermon={handleSaveSermon}
+            pendingCount={pendingCount}
+            upcomingBirthdays={upcomingBirthdays}
+            loadingStats={loadingStats}
           />
         ))}
       </Reorder.Group>
@@ -299,8 +367,9 @@ function DashboardSection({
   id, t, mode, dailyVerse, setIsEditingVerse, isEditingVerse, setDailyVerse, 
   navigate, personnelSearch, setPersonnelSearch, highlightedStaff, setHighlightedStaff, 
   activities, loadingMore, handleLoadMore, customVerse, setCustomVerse, customRef, 
-  setCustomRef, handleSaveCustom, aiQuestion, setAiQuestion, aiResponse, aiLoading, 
-  handleAskAI, sermon, isEditingSermon, setIsEditingSermon, handleSaveSermon 
+  setCustomRef, handleSaveCustom, aiQuestion, setAiQuestion, aiResult, aiLoading, 
+  handleAskAI, sermon, isEditingSermon, setIsEditingSermon, handleSaveSermon,
+  pendingCount, upcomingBirthdays, loadingStats
 }: any) {
   const controls = useDragControls();
 
@@ -428,6 +497,85 @@ function DashboardSection({
         </section>
       )}
 
+      {id === 'AiAssistant' && (
+        <section className="rounded-[32px] bg-white p-8 border border-outline-variant/30 shadow-sm transition-all hover:shadow-xl hover:shadow-primary/5 group/ai">
+          <header className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover/ai:bg-primary group-hover/ai:text-white transition-all">
+                <span className="material-symbols-outlined filled">smart_toy</span>
+              </div>
+              <div>
+                <h3 className="font-serif text-xl font-black text-on-surface">Grace Assistant</h3>
+                <p className="text-[9px] font-black uppercase tracking-widest text-outline opacity-70">Church Intelligence</p>
+              </div>
+            </div>
+          </header>
+
+          <form onSubmit={handleAskAI} className="relative mb-6">
+            <input 
+              type="text"
+              placeholder={t('askGrace') || "Ask about roster, members, or tasks..."}
+              value={aiQuestion}
+              onChange={(e) => setAiQuestion(e.target.value)}
+              className="w-full bg-surface-container-low border-2 border-transparent pl-6 pr-16 py-4 rounded-2xl focus:border-primary/30 focus:bg-white outline-none font-bold text-sm transition-all"
+            />
+            <button 
+              type="submit"
+              disabled={aiLoading || !aiQuestion.trim()}
+              className="absolute right-2 top-2 bottom-2 px-4 rounded-xl bg-black text-white hover:bg-primary disabled:opacity-20 transition-all"
+            >
+              <span className="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </form>
+
+          <AnimatePresence mode="wait">
+            {aiResult && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-5 rounded-2xl bg-primary-container/20 border border-primary/10"
+              >
+                <p className="text-sm leading-relaxed text-on-surface-variant whitespace-pre-wrap">{aiResult.message}</p>
+                
+                <div className="mt-4 flex flex-wrap gap-2">
+                   {aiResult.suggestRosterButton && (
+                     <button 
+                       onClick={() => navigate('/app/roster')}
+                       className="px-3 py-1.5 bg-black text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                     >
+                        Roster
+                     </button>
+                   )}
+                   {aiResult.suggestMembersButton && (
+                     <button 
+                       onClick={() => navigate('/app/members')}
+                       className="px-3 py-1.5 bg-primary text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                     >
+                        Members
+                     </button>
+                   )}
+                   {aiResult.suggestTasksButton && (
+                     <button 
+                       onClick={() => navigate('/app/tasks')}
+                       className="px-3 py-1.5 bg-tertiary text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all"
+                     >
+                        Tasks
+                     </button>
+                   )}
+                   <button 
+                    onClick={() => navigate('/app/ai')}
+                    className="ml-auto text-[9px] font-black uppercase tracking-widest text-primary hover:underline flex items-center gap-1"
+                   >
+                     {t('openFullChat') || 'Full Chat'}
+                     <span className="material-symbols-outlined text-xs">open_in_new</span>
+                   </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+      )}
+
       {id === 'MainStats' && (
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className={`lg:col-span-7 overflow-hidden rounded-[32px] bg-white border border-outline-variant/30 shadow-sm p-8 md:p-12 flex flex-col justify-center relative group/inner transition-all duration-500 ${isEditingSermon ? 'ring-2 ring-primary bg-primary/[0.01]' : ''}`}>
@@ -535,8 +683,34 @@ function DashboardSection({
                 <p className="mt-2 text-[10px] font-bold text-secondary">12/16 {t('members')} confirmed</p>
              </div>
 
+             {/* Upcoming Birthdays (New Component) */}
+             <div className="p-6 rounded-[28px] bg-gradient-to-br from-[#FFF7ED] to-white border border-orange-100 flex flex-col justify-center flex-1 transition-all hover:shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                   <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                      <span className="material-symbols-outlined filled">cake</span>
+                   </div>
+                   <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">{t('thisMonth') || 'This Month'}</span>
+                </div>
+                <h4 className="font-bold text-on-surface text-sm mb-3">{t('upcomingBirthdays') || 'Upcoming Birthdays'}</h4>
+                <div className="flex flex-col gap-2">
+                   {loadingStats ? (
+                     <div className="flex justify-center p-4">
+                        <div className="w-4 h-4 rounded-full border-2 border-orange-400 border-t-transparent animate-spin"></div>
+                     </div>
+                   ) : upcomingBirthdays.length > 0 ? upcomingBirthdays.map((p, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                         <div className="h-6 w-6 rounded-full bg-orange-200 overflow-hidden flex items-center justify-center">
+                            {p.avatar_url ? <img src={p.avatar_url} className="h-full w-full object-cover" /> : <span className="text-[10px] font-bold text-orange-800">{p.full_name?.charAt(0)}</span>}
+                         </div>
+                         <span className="text-xs font-medium text-on-surface line-clamp-1">{p.full_name}</span>
+                         <span className="text-[10px] text-orange-400 ml-auto font-black">{p.dob.split('-').slice(1).join('/')}</span>
+                      </div>
+                   )) : <p className="text-[10px] text-outline italic">No birthdays this month</p>}
+                </div>
+             </div>
+
              {/* Pending Items */}
-             <div className="p-6 rounded-[28px] bg-surface-container-low border border-outline-variant/20 flex flex-col justify-center flex-1 transition-all hover:bg-surface-container-high cursor-pointer" onClick={() => navigate('/app/tasks')}>
+             <div className="p-6 rounded-[28px] bg-surface-container-low border border-outline-variant/20 flex flex-col justify-center flex-1 transition-all hover:bg-surface-container-high cursor-pointer" onClick={() => navigate('/app/approvals')}>
                 <div className="flex items-center justify-between mb-4">
                    <div className="h-10 w-10 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary">
                       <span className="material-symbols-outlined filled">assignment_late</span>
@@ -544,7 +718,15 @@ function DashboardSection({
                    <span className="text-[10px] font-black text-outline uppercase tracking-widest">Pending</span>
                 </div>
                 <h4 className="font-bold text-on-surface text-sm">{t('pendingItems')}</h4>
-                <p className="text-3xl font-serif font-black text-tertiary mt-1">5 <span className="text-xs font-bold text-on-surface-variant tracking-normal">Action Required</span></p>
+                {loadingStats ? (
+                   <div className="mt-4 flex animate-pulse">
+                      <div className="h-8 w-12 bg-surface-container rounded-lg"></div>
+                   </div>
+                 ) : (
+                   <p className="text-3xl font-serif font-black text-tertiary mt-1">
+                     {pendingCount} <span className="text-xs font-bold text-on-surface-variant tracking-normal">Action Required</span>
+                   </p>
+                 )}
              </div>
 
              {/* Sunday Worship Service */}
@@ -766,4 +948,6 @@ function StaffChip({ name, highlight, color = "bg-black", isPill = false }: any)
     </div>
   );
 }
+
+
 

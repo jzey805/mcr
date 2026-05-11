@@ -31,6 +31,7 @@ export default function ReadyPPT() {
   const [editName, setEditName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [noti, setNoti] = useState<string | null>(null);
+  const [previewItem, setPreviewItem] = useState<PPTItem | null>(null);
 
   const filteredLibrary = library.filter(item => {
     const matchesFilter = filter === 'all' || item.type === filter;
@@ -155,112 +156,49 @@ export default function ReadyPPT() {
         <div className="h-px bg-[#E5E0DA]/50 flex-1 hidden md:block"></div>
       </div>
 
-      {/* Library Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-6">
         <AnimatePresence mode="popLayout">
           {filteredLibrary.length > 0 ? (
             filteredLibrary.map((item) => (
               <motion.div 
                 key={item.id}
                 layout
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="group relative bg-white rounded-[44px] border border-[#E5E0DA]/30 p-10 hover:shadow-[0_45px_100px_-25px_rgba(0,0,0,0.12)] hover:border-emerald-500/30 transition-all duration-700 flex flex-col"
+                whileHover={{ y: -4, scale: 1.02 }}
+                onClick={() => setPreviewItem(item)}
+                className="group relative bg-white rounded-2xl border border-[#E5E0DA]/30 p-4 hover:shadow-xl hover:border-emerald-500/30 transition-all duration-300 flex flex-col cursor-pointer aspect-[4/5]"
               >
-                 <div className="flex justify-between items-start mb-10">
-                    <div className={`w-20 h-20 rounded-[32px] flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500 ${item.type === 'weekly' ? 'bg-emerald-500 text-white shadow-emerald-500/20' : item.type === 'song' ? 'bg-indigo-600 text-white shadow-indigo-500/20' : 'bg-orange-500 text-white shadow-orange-500/20'}`}>
-                      <span className="material-symbols-outlined text-4xl">
+                 <div className="flex justify-between items-start mb-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-sm transition-transform duration-500 ${item.type === 'weekly' ? 'bg-emerald-500 text-white' : item.type === 'song' ? 'bg-indigo-600 text-white' : 'bg-orange-500 text-white'}`}>
+                      <span className="material-symbols-outlined text-base">
                          {item.type === 'weekly' ? 'auto_awesome_motion' : item.type === 'song' ? 'mic_external_on' : 'edit_document'}
                       </span>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                       <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] ${item.type === 'weekly' ? 'bg-emerald-50 text-emerald-600' : item.type === 'song' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'}`}>
-                         {item.type}
-                       </span>
-                       <span className="text-[10px] font-black text-outline/30">{item.size}</span>
+                    <span className="text-[6px] font-black text-outline/30 uppercase tracking-tighter">{item.size}</span>
+                 </div>
+
+                 <div className="flex-1 flex flex-col justify-between">
+                    <div className="mb-2">
+                       <h4 className="text-[11px] font-serif font-black text-[#2C2C2C] leading-snug line-clamp-3">
+                         {item.name}
+                       </h4>
+                    </div>
+  
+                    <div className="pt-2.5 border-t border-[#E5E0DA]/30 flex justify-between items-center">
+                        <p className="text-[7px] font-bold text-outline/40">{item.date}</p>
+                        <span className="material-symbols-outlined text-emerald-500/30 text-[12px]">view_quilt</span>
                     </div>
                  </div>
 
-                 <div className="flex-1">
-                    {editingId === item.id ? (
-                      <div className="mb-6 space-y-3">
-                        <input 
-                          autoFocus
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onBlur={saveName}
-                          onKeyDown={(e) => e.key === 'Enter' && saveName()}
-                          className="w-full bg-[#F9F7F5] border-2 border-emerald-500/30 rounded-2xl px-6 py-4 text-sm font-black text-[#2C2C2C] focus:ring-0 mb-2"
-                        />
-                        <div className="flex items-center gap-2 text-emerald-500">
-                           <span className="material-symbols-outlined text-[14px]">info</span>
-                           <p className="text-[8px] font-black uppercase tracking-widest">{t('filenameUpdated')} · ENTER</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div 
-                        onClick={() => startEditing(item)}
-                        className="group/title cursor-pointer mb-4"
-                      >
-                         <h4 className="text-[22px] font-serif font-black text-[#2C2C2C] leading-snug group-hover:text-emerald-600 transition-colors">
-                           {item.name}
-                         </h4>
-                         <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="material-symbols-outlined text-sm text-emerald-500">edit</span>
-                            <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest italic">{t('filenameUpdated')}</span>
-                         </div>
-                      </div>
-                    )}
- 
-                    <div className="grid grid-cols-2 gap-6 mt-8 pt-8 border-t border-[#E5E0DA]/30">
-                       <div className="space-y-1">
-                          <p className="text-[8px] font-black text-outline/30 uppercase tracking-widest">{t('entryDate')}</p>
-                          <p className="text-[11px] font-bold text-[#2C2C2C]">{item.date}</p>
-                       </div>
-                       {item.songCount ? (
-                         <div className="space-y-1">
-                            <p className="text-[8px] font-black text-outline/30 uppercase tracking-widest">{t('songIncluded')}</p>
-                            <p className="text-[11px] font-bold text-[#2C2C2C]">{item.songCount} {t('songIncluded')}</p>
-                         </div>
-                       ) : item.preacher ? (
-                         <div className="space-y-1">
-                            <p className="text-[8px] font-black text-outline/30 uppercase tracking-widest">{t('sharePerson')}</p>
-                            <p className="text-[11px] font-bold text-[#2C2C2C]">{item.preacher}</p>
-                         </div>
-                       ) : (
-                         <div className="space-y-1 text-right">
-                            <p className="text-[8px] font-black text-outline/30 uppercase tracking-widest">{t('storageLocation')}</p>
-                            <p className="text-[11px] font-bold text-emerald-600 flex items-center justify-end gap-1">
-                               <span className="material-symbols-outlined text-[14px]">cloud_done</span>
-                               Global Cloud
-                            </p>
-                         </div>
-                       )}
-                    </div>
-                 </div>
- 
-                 <div className="mt-12 flex gap-3">
-                    <button className="flex-1 py-5 bg-[#F9F7F5] rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-sm active:scale-95">
-                      {t('onlinePreview')}
-                    </button>
+                 {/* Hover Action Overlay */}
+                 <div className="absolute inset-x-1.5 bottom-1.5 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0" onClick={e => e.stopPropagation()}>
                     <button 
-                      onClick={() => handleDownload(item)}
-                      className="flex-1 py-5 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-95"
+                       onClick={() => handleDownload(item)}
+                       className="w-full py-1 bg-black text-white rounded-md text-[6px] font-black uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg"
                     >
-                      <span className="material-symbols-outlined text-lg">download</span>
-                      {t('downloadFile')}
-                    </button>
-                 </div>
-
-                 {/* Delete Interaction */}
-                 <div className="absolute top-8 left-8 opacity-0 group-hover:opacity-100 transition-all">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                      className="h-10 w-10 rounded-full flex items-center justify-center text-outline/20 hover:text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-xl">delete_sweep</span>
+                      Download
                     </button>
                  </div>
               </motion.div>
@@ -292,55 +230,144 @@ export default function ReadyPPT() {
                initial={{ opacity: 0, scale: 0.9, y: 20 }}
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.95 }}
-               className="relative bg-[#F9F7F5] w-full max-w-4xl rounded-[56px] overflow-hidden shadow-2xl p-12 lg:p-20"
+               className="relative bg-[#F9F7F5] w-full max-w-4xl rounded-[48px] overflow-hidden shadow-2xl p-8 lg:p-16"
              >
-                <div className="flex flex-col lg:flex-row gap-16">
-                   <div className="flex-1 space-y-8">
-                      <div className="space-y-2">
-                        <h2 className="text-4xl font-serif font-black text-[#2C2C2C] tracking-tighter italic">Upload Resource</h2>
-                        <p className="text-sm text-outline/40 font-medium">请将您的 PPT 文件拖入下方或点击选择分类进行录入。</p>
+                <div className="flex flex-col lg:flex-row gap-12">
+                   <div className="flex-1 space-y-6">
+                      <div className="space-y-1">
+                        <h2 className="text-3xl font-serif font-black text-[#2C2C2C] tracking-tighter italic">Upload Resource</h2>
+                        <p className="text-[11px] text-outline/40 font-medium whitespace-pre-wrap">请将您的 PPT 文件拖入下方或点击选择分类进行录入。</p>
                       </div>
 
-                      <div className="border-4 border-dashed border-[#E5E0DA] rounded-[44px] aspect-video flex flex-col items-center justify-center group hover:border-emerald-500/30 hover:bg-emerald-50/30 transition-all cursor-pointer">
-                         <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center text-outline/20 shadow-sm group-hover:text-emerald-500 group-hover:scale-110 transition-all mb-6">
-                            <span className="material-symbols-outlined text-4xl">upload_file</span>
+                      <div className="border-2 border-dashed border-[#E5E0DA] rounded-[32px] aspect-video flex flex-col items-center justify-center group hover:border-emerald-500/30 hover:bg-emerald-50/30 transition-all cursor-pointer">
+                         <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-outline/20 shadow-sm group-hover:text-emerald-500 group-hover:scale-110 transition-all mb-4">
+                            <span className="material-symbols-outlined text-3xl">upload_file</span>
                          </div>
-                         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-outline/40 group-hover:text-emerald-600">Drag & Drop Files Here</p>
+                         <p className="text-[9px] font-black uppercase tracking-[0.2em] text-outline/40 group-hover:text-emerald-600">Drag & Drop Files Here</p>
                       </div>
                    </div>
 
                    <div className="w-px bg-[#E5E0DA] hidden lg:block"></div>
 
-                   <div className="w-full lg:w-80 space-y-10">
-                      <div className="space-y-4">
-                         <h4 className="text-[10px] font-black uppercase tracking-widest text-[#2C2C2C]">选择资源分类</h4>
-                         <div className="space-y-3">
-                            <button onClick={() => handleManualUpload('weekly')} className="w-full p-6 bg-white rounded-[24px] border border-[#E5E0DA]/50 flex items-center gap-4 hover:border-emerald-500/30 hover:shadow-lg transition-all group">
-                               <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
-                                  <span className="material-symbols-outlined">event_repeat</span>
+                   <div className="w-full lg:w-72 space-y-8">
+                      <div className="space-y-3">
+                         <h4 className="text-[9px] font-black uppercase tracking-widest text-[#2C2C2C]">选择资源分类</h4>
+                         <div className="grid grid-cols-1 gap-2">
+                            <button onClick={() => handleManualUpload('weekly')} className="w-full p-4 bg-white rounded-2xl border border-[#E5E0DA]/50 flex items-center gap-3 hover:border-emerald-500/30 hover:shadow-md transition-all group">
+                               <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                                  <span className="material-symbols-outlined text-xl">event_repeat</span>
                                </div>
-                               <span className="text-xs font-black uppercase tracking-widest">本周敬拜 PPT</span>
+                               <span className="text-[10px] font-black uppercase tracking-widest">本周 PPT</span>
                             </button>
-                            <button onClick={() => handleManualUpload('song')} className="w-full p-6 bg-white rounded-[24px] border border-[#E5E0DA]/50 flex items-center gap-4 hover:border-indigo-500/30 hover:shadow-lg transition-all group">
-                               <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                  <span className="material-symbols-outlined">music_note</span>
+                            <button onClick={() => handleManualUpload('song')} className="w-full p-4 bg-white rounded-2xl border border-[#E5E0DA]/50 flex items-center gap-3 hover:border-indigo-500/30 hover:shadow-md transition-all group">
+                               <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                  <span className="material-symbols-outlined text-xl">music_note</span>
                                </div>
-                               <span className="text-xs font-black uppercase tracking-widest">单曲歌库 PPT</span>
+                               <span className="text-[10px] font-black uppercase tracking-widest">歌库 PPT</span>
                             </button>
-                            <button onClick={() => handleManualUpload('sermon')} className="w-full p-6 bg-white rounded-[24px] border border-[#E5E0DA]/50 flex items-center gap-4 hover:border-orange-500/30 hover:shadow-lg transition-all group">
-                               <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                                  <span className="material-symbols-outlined">auto_stories</span>
+                            <button onClick={() => handleManualUpload('sermon')} className="w-full p-4 bg-white rounded-2xl border border-[#E5E0DA]/50 flex items-center gap-3 hover:border-orange-500/30 hover:shadow-md transition-all group">
+                               <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                                  <span className="material-symbols-outlined text-xl">auto_stories</span>
                                </div>
-                               <span className="text-xs font-black uppercase tracking-widest">讲道大纲资源</span>
+                               <span className="text-[10px] font-black uppercase tracking-widest">讲道资源</span>
                             </button>
                          </div>
                       </div>
 
                       <button 
                         onClick={() => setIsUploading(false)}
-                        className="w-full py-5 bg-black text-white rounded-[24px] text-[10px] font-black font-sans uppercase tracking-[0.3em] hover:bg-emerald-600 transition-all shadow-xl active:scale-95"
+                        className="w-full py-4 bg-black text-white rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] hover:bg-red-600 transition-all shadow-xl active:scale-95"
                       >
-                         Cancel Upload
+                         Cancel
+                      </button>
+                   </div>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Online Preview Modal */}
+      <AnimatePresence>
+        {previewItem && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ opacity: 0 }}
+               animate={{ opacity: 1 }}
+               exit={{ opacity: 0 }}
+               onClick={() => setPreviewItem(null)}
+               className="absolute inset-0 bg-black/90 backdrop-blur-xl"
+             />
+             <motion.div 
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.9 }}
+               className="relative w-full max-w-6xl aspect-video bg-[#1A1A1A] rounded-[32px] overflow-hidden shadow-2xl flex flex-col"
+             >
+                {/* Simulated PPT Content */}
+                <div className="flex-1 flex items-center justify-center relative group">
+                   <div className="absolute top-8 left-8 z-10 space-y-1">
+                      <h3 className="text-white text-xl font-serif font-black">{previewItem.name}</h3>
+                      <p className="text-white/40 text-[10px] font-black tracking-widest uppercase">{previewItem.date} · SLIDE 1 OF 12</p>
+                   </div>
+                   
+                   {/* Placeholder Slide Visual */}
+                   <div className="w-full h-full flex flex-col items-center justify-center p-20 text-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 to-black pointer-events-none"></div>
+                      <span className="material-symbols-outlined text-emerald-500/20 text-[300px] absolute -right-20 -bottom-20 rotate-12 select-none">
+                         {previewItem.type === 'weekly' ? 'auto_awesome_motion' : previewItem.type === 'song' ? 'lyrics' : 'menu_book'}
+                      </span>
+                      
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="relative z-10 space-y-6"
+                      >
+                        <h2 className="text-6xl md:text-8xl font-serif font-black text-white italic leading-tight tracking-tighter">
+                          {previewItem.title || previewItem.name.split('_').join(' ')}
+                        </h2>
+                        {previewItem.preacher && (
+                          <p className="text-emerald-400 text-2xl font-black uppercase tracking-[0.5em]">{previewItem.preacher}</p>
+                        )}
+                        <p className="text-white/60 text-lg max-w-2xl mx-auto font-medium">
+                          "Everything you design should have a rhythm, a purpose, and a soul."
+                        </p>
+                      </motion.div>
+                   </div>
+
+                   {/* Controls */}
+                   <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 p-2 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button className="h-10 w-10 rounded-xl hover:bg-white/10 text-white transition-colors">
+                        <span className="material-symbols-outlined">navigate_before</span>
+                      </button>
+                      <div className="h-10 px-4 flex items-center text-[10px] font-black text-white/60 border-x border-white/10 uppercase tracking-widest">
+                        1 / 12
+                      </div>
+                      <button className="h-10 w-10 rounded-xl hover:bg-white/10 text-white transition-colors">
+                        <span className="material-symbols-outlined">navigate_next</span>
+                      </button>
+                   </div>
+                </div>
+
+                {/* Footer bar */}
+                <div className="h-20 bg-white/5 border-t border-white/10 flex items-center justify-between px-10 shrink-0">
+                   <div className="flex items-center gap-4">
+                      <div className={`w-3 h-3 rounded-full ${previewItem.type === 'weekly' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
+                      <span className="text-white/80 text-[10px] font-black uppercase tracking-widest">{previewItem.type} Mode</span>
+                   </div>
+                   <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => handleDownload(previewItem)}
+                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2"
+                      >
+                         <span className="material-symbols-outlined text-sm">download</span>
+                         Download PPT
+                      </button>
+                      <button 
+                        onClick={() => setPreviewItem(null)}
+                        className="px-6 py-3 bg-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all"
+                      >
+                         Close
                       </button>
                    </div>
                 </div>

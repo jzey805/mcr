@@ -14,7 +14,9 @@ export interface Member {
   age?: number;
   dob?: string;
   occupation?: string;
-  status: 'Pastor' | 'Leader' | 'Member' | 'New Friend';
+  origin?: string;
+  yearsInAus?: string;
+  status: 'Pastor' | 'Leader' | 'Member' | 'New Friend' | 'Pending';
   referral_source?: string;
   friends_with?: string[];
   skills?: string[];

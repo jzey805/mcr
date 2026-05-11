@@ -16,6 +16,27 @@ CREATE POLICY "Users can view their own church" ON public.churches
         id IN (SELECT church_id FROM public.profiles WHERE id = auth.uid())
     );
 
+-- Allow church Managers to update their church info (code, name)
+CREATE POLICY "Managers can update their church" ON public.churches
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role = 'Manager' 
+            AND profiles.church_id = public.churches.id
+        )
+    );
+
+-- Allow Super Admins to manage all churches
+CREATE POLICY "SuperAdmins can manage all churches" ON public.churches
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.profiles 
+            WHERE profiles.id = auth.uid() 
+            AND profiles.role IN ('Super Admin', 'SuperAdmin')
+        )
+    );
+
 -- 2. Create Profiles Table (Users)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
@@ -109,7 +130,7 @@ BEGIN
         NEW.id,
         target_church_id,
         NEW.raw_user_meta_data->>'full_name',
-        'Member'
+        'Pending'
     );
     RETURN NEW;
 END;
@@ -119,3 +140,28 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- CREATE TRIGGER on_auth_user_created
 --   AFTER INSERT ON auth.users
 --   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 6. Create Church Applications Table
+CREATE TABLE IF NOT EXISTS public.church_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    church_name TEXT NOT NULL,
+    leader_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    address TEXT,
+    source_link TEXT,
+    status TEXT DEFAULT 'Pending', -- Pending, Approved, Rejected
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS on Church Applications
+ALTER TABLE public.church_applications ENABLE ROW LEVEL SECURITY;
+
+-- Allow anyone to insert an application
+CREATE POLICY "Anyone can submit an application" ON public.church_applications
+    FOR INSERT WITH CHECK (true);
+
+-- Allow authenticated users to view/manage applications
+CREATE POLICY "Authenticated users can manage applications" ON public.church_applications
+    FOR ALL USING (auth.role() = 'authenticated');
+
